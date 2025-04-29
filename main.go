@@ -4,11 +4,9 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-
 	_ "github.com/lib/pq"
-
-	"gorm-crud/models"
-	"gorm-crud/routes"
+	"go-crud/models"
+	"go-crud/routes"
 )
 
 func main() {

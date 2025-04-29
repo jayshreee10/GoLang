@@ -1,4 +1,4 @@
-module gorm-crud
+module go-crud
 
 go 1.13
 

@@ -4,16 +4,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-
-	"gorm-crud/models"
+	"go-crud/models"
 )
 
-type request struct {
+type userRequest struct {
 	ID    int    `json:"id,omitempty"`
 	Email string `json:"email,omitempty"`
 }
 
-type response struct {
+type userResponse struct {
 	Message string `json:"message"`
 }
 
@@ -27,7 +26,7 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateUser(w http.ResponseWriter, r *http.Request) {
-	var req request
+	var req userRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -37,11 +36,11 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error creating user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(response{Message: "User created with ID " + strconv.Itoa(id)})
+	json.NewEncoder(w).Encode(userResponse{Message: "User created with ID " + strconv.Itoa(id)})
 }
 
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
-	var req request
+	var req userRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -50,11 +49,11 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error updating user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(response{Message: "User updated successfully"})
+	json.NewEncoder(w).Encode(userResponse{Message: "User updated successfully"})
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	var req request
+	var req userRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -63,5 +62,5 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error deleting user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(response{Message: "User deleted successfully"})
+	json.NewEncoder(w).Encode(userResponse{Message: "User deleted successfully"})
 }
