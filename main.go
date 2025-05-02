@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,12 @@ import (
 func main() {
 	// Load configuration from environment variables
 	config.Initialize()
+	
+	// Log admin credentials for development purposes
+	log.Printf("Admin credentials set to - Email: %s, Password: %s", 
+		config.AppConfig.DefaultAdminEmail, 
+		config.AppConfig.DefaultAdminPassword)
+	log.Println("IMPORTANT: Change these credentials in production using environment variables!")
 	
 	dbPath := config.AppConfig.DBPath
 
@@ -42,9 +49,16 @@ func main() {
 	}
 	
 	log.Println("Connected to SQLite DB at", dbPath)
+	
+	// Register API routes
 	routes.RegisterRoutes()
 	
+	// Start HTTP server
 	serverAddr := ":" + config.AppConfig.ServerPort
-	log.Println("Server running at http://localhost" + serverAddr)
+	fmt.Printf("\n✓ Server is running!\n")
+	fmt.Printf("✓ Local:   http://localhost%s\n\n", serverAddr)
+	fmt.Println("Authentication required for all endpoints:")
+	fmt.Printf("✓ Username: %s\n", config.AppConfig.DefaultAdminEmail)
+	fmt.Printf("✓ Password: %s\n\n", config.AppConfig.DefaultAdminPassword)
 	log.Fatal(http.ListenAndServe(serverAddr, nil))
 }
