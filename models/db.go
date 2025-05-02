@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"go-crud/auth"
+	"go-crud/config"
 	"log"
 )
 
@@ -137,19 +138,23 @@ func seedInitialData() error {
 	}
 
 	if count == 0 {
-		// Hash the default password "admin123"
-		hashedPassword, err := auth.HashPassword("admin123")
+		// Get admin credentials from config
+		adminEmail := config.AppConfig.DefaultAdminEmail
+		adminPassword := config.AppConfig.DefaultAdminPassword
+		
+		// Hash the default password
+		hashedPassword, err := auth.HashPassword(adminPassword)
 		if err != nil {
 			return err
 		}
 
 		// Insert admin user
 		_, err = DB.Exec("INSERT INTO users (email, password) VALUES (?, ?)", 
-			"admin@example.com", hashedPassword)
+			adminEmail, hashedPassword)
 		if err != nil {
 			return err
 		}
-		log.Println("Created default admin user: admin@example.com with password: admin123")
+		log.Printf("Created default admin user: %s with password: %s", adminEmail, adminPassword)
 	} else {
 		// Update existing users with default password if they don't have one
 		rows, err := DB.Query("SELECT id, email FROM users WHERE password IS NULL")

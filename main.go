@@ -9,11 +9,14 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"go-crud/models"
 	"go-crud/routes"
+	"go-crud/config"
 )
 
 func main() {
-
-	dbPath := "./sqlite_db.db"
+	// Load configuration from environment variables
+	config.Initialize()
+	
+	dbPath := config.AppConfig.DBPath
 
 	needInit := false
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -41,6 +44,7 @@ func main() {
 	log.Println("Connected to SQLite DB at", dbPath)
 	routes.RegisterRoutes()
 	
-	log.Println("Server running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	serverAddr := ":" + config.AppConfig.ServerPort
+	log.Println("Server running at http://localhost" + serverAddr)
+	log.Fatal(http.ListenAndServe(serverAddr, nil))
 }
