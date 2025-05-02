@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"errors"
+	"go-crud/auth"
 	"log"
 )
 
@@ -16,6 +17,7 @@ func InitDB() error {
 	CREATE TABLE IF NOT EXISTS users (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		email TEXT NOT NULL UNIQUE,
+		password TEXT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)`)
 	if err != nil {
@@ -23,6 +25,20 @@ func InitDB() error {
 	}
 	log.Println("Users table created successfully")
 
+	// Create refresh_tokens table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS refresh_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		token TEXT NOT NULL UNIQUE,
+		expires_at TIMESTAMP NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	)`)
+	if err != nil {
+		return err
+	}
+	log.Println("Refresh tokens table created successfully")
 
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS products (
@@ -113,19 +129,88 @@ func InitDB() error {
 }
 
 func seedInitialData() error {
+	// Create default admin user with hashed password if no users exist
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		// Hash the default password "admin123"
+		hashedPassword, err := auth.HashPassword("admin123")
+		if err != nil {
+			return err
+		}
+
+		// Insert admin user
+		_, err = DB.Exec("INSERT INTO users (email, password) VALUES (?, ?)", 
+			"admin@example.com", hashedPassword)
+		if err != nil {
+			return err
+		}
+		log.Println("Created default admin user: admin@example.com with password: admin123")
+	} else {
+		// Update existing users with default password if they don't have one
+		rows, err := DB.Query("SELECT id, email FROM users WHERE password IS NULL")
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id int
+			var email string
+			if err := rows.Scan(&id, &email); err != nil {
+				return err
+			}
+
+			// Hash the default password
+			hashedPassword, err := auth.HashPassword("password123")
+			if err != nil {
+				return err
+			}
+
+			// Update user with password
+			_, err = DB.Exec("UPDATE users SET password = ? WHERE id = ?", hashedPassword, id)
+			if err != nil {
+				return err
+			}
+			log.Printf("Added default password for user %s (ID: %d)", email, id)
+		}
+	}
+
 	// Add sample users
 	users := []struct {
-		Email string
+		Email    string
+		Password string
 	}{
-		{"admin@example.com"},
-		{"user1@example.com"},
-		{"user2@example.com"},
+		{"user1@example.com", "password123"},
+		{"user2@example.com", "password123"},
 	}
 
 	for _, user := range users {
-		_, err := DB.Exec("INSERT OR IGNORE INTO users (email) VALUES (?)", user.Email)
+		// Check if user already exists
+		var exists int
+		err := DB.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", user.Email).Scan(&exists)
 		if err != nil {
 			return err
+		}
+
+		if exists == 0 {
+			// Hash the password
+			hashedPassword, err := auth.HashPassword(user.Password)
+			if err != nil {
+				return err
+			}
+
+			// Insert the user
+			_, err = DB.Exec("INSERT INTO users (email, password) VALUES (?, ?)", 
+				user.Email, hashedPassword)
+			if err != nil {
+				return err
+			}
+			log.Printf("Created sample user: %s", user.Email)
 		}
 	}
 
@@ -177,32 +262,43 @@ func seedInitialData() error {
 	}
 
 	for _, order := range orders {
-		result, err := DB.Exec("INSERT OR IGNORE INTO orders (user_id, total_amount, status) VALUES (?, ?, ?)", 
-			order.UserID, order.TotalAmount, order.Status)
+		// Check if the user exists first (we might have fewer than 3 users)
+		var exists int
+		err := DB.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", order.UserID).Scan(&exists)
 		if err != nil {
 			return err
 		}
-		// Get the order ID for inserting order items
-		orderID, _ := result.LastInsertId()
-		
-		// Add sample order items
-		if orderID == 1 {
-			_, err = DB.Exec("INSERT OR IGNORE INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)", 
-				orderID, 1, 2, 49.99)
+
+		// Only create the order if the user exists
+		if exists > 0 {
+			result, err := DB.Exec("INSERT OR IGNORE INTO orders (user_id, total_amount, status) VALUES (?, ?, ?)", 
+				order.UserID, order.TotalAmount, order.Status)
 			if err != nil {
 				return err
 			}
-		} else if orderID == 2 {
-			_, err = DB.Exec("INSERT OR IGNORE INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)", 
-				orderID, 2, 1, 149.95)
-			if err != nil {
-				return err
-			}
-		} else if orderID == 3 {
-			_, err = DB.Exec("INSERT OR IGNORE INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)", 
-				orderID, 3, 1, 29.99)
-			if err != nil {
-				return err
+			
+			// Get the order ID for inserting order items
+			orderID, _ := result.LastInsertId()
+			
+			// Add sample order items
+			if orderID == 1 {
+				_, err = DB.Exec("INSERT OR IGNORE INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)", 
+					orderID, 1, 2, 49.99)
+				if err != nil {
+					return err
+				}
+			} else if orderID == 2 {
+				_, err = DB.Exec("INSERT OR IGNORE INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)", 
+					orderID, 2, 1, 149.95)
+				if err != nil {
+					return err
+				}
+			} else if orderID == 3 {
+				_, err = DB.Exec("INSERT OR IGNORE INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)", 
+					orderID, 3, 1, 29.99)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -223,14 +319,24 @@ func seedInitialData() error {
 	}
 	
 	for _, address := range addresses {
-		_, err := DB.Exec(`
-			INSERT OR IGNORE INTO addresses 
-			(user_id, street_line1, street_line2, city, state, postal_code, country, is_default) 
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			address.UserID, address.StreetLine1, address.StreetLine2, address.City, 
-			address.State, address.PostalCode, address.Country, address.IsDefault)
+		// Check if the user exists first
+		var exists int
+		err := DB.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", address.UserID).Scan(&exists)
 		if err != nil {
 			return err
+		}
+
+		// Only create the address if the user exists
+		if exists > 0 {
+			_, err := DB.Exec(`
+				INSERT OR IGNORE INTO addresses 
+				(user_id, street_line1, street_line2, city, state, postal_code, country, is_default) 
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				address.UserID, address.StreetLine1, address.StreetLine2, address.City, 
+				address.State, address.PostalCode, address.Country, address.IsDefault)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
